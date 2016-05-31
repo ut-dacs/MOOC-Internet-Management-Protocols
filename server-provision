@@ -1,0 +1,62 @@
+#!/bin/bash
+
+# Update packages and install dependencies
+apt-get update
+apt-get -y install build-essential apache2 apache2-utils libapache2-mod-php5 libgd2-xpm-dev openssl libssl-dev xinetd unzip
+
+# We need net-snmp
+apt-get install snmp -y
+
+# Create nagios user and group
+useradd nagios
+groupadd nagcmd
+usermod -G nagcmd nagios
+usermod -a -G nagcmd www-data
+
+# Install Nagios
+curl -L -O https://assets.nagios.com/downloads/nagioscore/releases/nagios-4.1.1.tar.gz
+tar -xzf nagios-4.1.1.tar.gz
+cd nagios-4.1.1
+./configure --with-command-group=nagcmd --with-httpd-conf=/etc/apache2/sites-available
+make all
+make install
+make install-init
+make install-commandmode
+make install-config
+make install-webconf
+htpasswd -b -c /usr/local/nagios/etc/htpasswd.users nagiosadmin nagios
+chown nagios:nagios /usr/local/nagios/etc/htpasswd.users
+a2ensite nagios
+a2enmod cgi
+
+# Install Nagios plugins
+cd ..
+curl -L -O http://nagios-plugins.org/download/nagios-plugins-2.1.1.tar.gz
+tar xvf nagios-plugins-2.1.1.tar.gz
+cd nagios-plugins-2.1.1
+./configure --with-nagios-user=nagios --with-nagios-group=nagios --with-openssl
+make
+make install
+
+# Install NRPE - Nagios Remote Plugin Executor
+cd ..
+curl -L -O http://downloads.sourceforge.net/project/nagios/nrpe-2.x/nrpe-2.15/nrpe-2.15.tar.gz
+tar -xzf nrpe-2.15.tar.gz
+cd nrpe-2.15
+./configure --enable-command-args --with-nagios-user=nagios --with-nagios-group=nagios --with-ssl=/usr/bin/openssl --with-ssl-lib=/usr/lib/x86_64-linux-gnu
+make
+make install
+
+# Overwrite the default Nagios Configuration files
+cd /usr/local/nagios/etc
+curl -L -O https://raw.githubusercontent.com/ut-dacs/MOOC-Internet-Management-Protocols/master/nagios.cfg
+curl -L -O https://raw.githubusercontent.com/ut-dacs/MOOC-Internet-Management-Protocols/master/minimal.cfg
+curl -L -O https://raw.githubusercontent.com/ut-dacs/MOOC-Internet-Management-Protocols/master/checkcommands.cfg
+curl -L -O https://raw.githubusercontent.com/ut-dacs/MOOC-Internet-Management-Protocols/master/exercise.cfg
+
+
+# Start Nagios and Apache web server
+# cd /
+update-rc.d nagios defaults 99
+service apache2 restart
+service nagios start

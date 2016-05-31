@@ -1,0 +1,72 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Many of the concepts and ideas used within this vagrant fie come from:
+# http://www.cyberciti.biz/cloud-computing/use-vagrant-to-create-small-virtual-lab-on-linux-osx/
+
+# All Vagrant configuration is done below. The "2" in Vagrant.configure
+# configures the configuration version (we support older styles for
+# backwards compatibility). Please don't change it unless you know what
+# you're doing.
+Vagrant.configure(2) do |config|
+  # The most common configuration options are documented and commented below.
+  # For a complete reference, please see the online documentation at
+  # https://docs.vagrantup.com.
+
+  # Every Vagrant development environment requires a box. You can search for
+  # boxes at https://atlas.hashicorp.com/search.
+  config.vm.box = "ubuntu/trusty64"
+ 
+  config.vm.provider "virtualbox" do |vb|
+    vb.cpus = 2
+  end
+ 
+  
+  # Disable automatic box update checking. If you disable this, then
+  # boxes will only be checked for updates when the user runs
+  # `vagrant box outdated`. This is not recommended.
+  # config.vm.box_check_update = false
+
+  # Network config is something that gets special treatment in Vagrant.
+  # While it is possible to configure Network via the provider block configuration,
+  # Vagrant tries to abstract as much as possible of the (usually) tedious
+  # network configuration into few high level settings. In our case, we ask
+  # Vagrant to configure private_network networking and assign IP addresses
+  # via DHCP. private_network means that each machine will get a private ip
+  # address from the private address space.
+  # I choose to use DHCP instead of static IPs because I would like my 
+  # Vagrantfile to be bit more portable. Choosing static IPs could mean 
+  # collisions with local networks at home or work.  
+  config.vm.network "private_network", type: "dhcp"
+ 
+  # Hostmanager config namespace is not a part of core Vagrant install.
+  # It is added by using the Hostmanager Vagrat plugin. This plugin allows
+  # a dynamic edit of host file on host and guest machines. It allows us
+  # to skip hardcoding IPs into our configuration and to work with hostnames
+  # instead of IPs. So later on when actually working with Nagios I can refer
+  # to server as nagios-server instead of its IP.
+  config.hostmanager.enabled = true
+  config.hostmanager.ip_resolver = proc do |vm, resolving_vm|
+    if vm.id
+      `VBoxManage guestproperty get #{vm.id} "/VirtualBox/GuestInfo/Net/1/V4/IP"`.split()[1]
+    end
+  end
+ 
+  # First line of each block defines machine hostname.
+  # Second line of each block defines a synced folder between host and guest
+  # machine. These are the folder of Nagios configurations which will allow 
+  # us to quickly reconfigure Nagios server and Nagios client without the need
+  # to SSH into the machine. Third line of the first block defines a port
+  # forwarding. This is done mainly for example only since we use private_network
+  # and can access machine by IP instead. Last line describes what provisioner
+  # we want to use. In our case we would use the simple shell provisioner.
+  # Vagrant will copy the files specified in path and execute them after machine
+  # is up and running.
+  config.vm.define :server do |srv|
+    srv.vm.hostname = "nagios-server"
+    srv.vm.synced_folder "server/", "/usr/local/nagios/etc", create: true
+    srv.vm.network "forwarded_port", guest: 80, host: 8080
+    srv.vm.provision "shell", path: "server-provision"
+  end
+ 
+end
